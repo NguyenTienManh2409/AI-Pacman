@@ -235,7 +235,7 @@ def pacmanSuccessorAxiomSingle(x: int, y: int, time: int, walls_grid: List[List[
         return None
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    return PropSymbolExpr(pacman_str, x, y, time=now) % logic.disjoin(possible_causes)
     "*** END YOUR CODE HERE ***"
 
 
@@ -306,7 +306,27 @@ def pacphysicsAxioms(t: int, all_coords: List[Tuple], non_outer_wall_coords: Lis
     pacphysics_sentences = []
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    # Nếu một bức tường nằm ở ( x ,y ), thì Pacman không có ở ( x ,y ) tại t.
+    for coordinate in all_coords:
+        pacphysics_sentences.append(logic.PropSymbolExpr(wall_str, coordinate[0], coordinate[1]) >> 
+                                    ~logic.PropSymbolExpr(pacman_str, coordinate[0], coordinate[1], time = t))
+    
+    # Pacman ở đúng một trong những mốc non_outer_wall_coords thời gian t
+    wall_list = [logic.PropSymbolExpr(pacman_str, wall_coordinate[0], wall_coordinate[1], time = t) for wall_coordinate in non_outer_wall_coords]
+    pacphysics_sentences.append(exactlyOne(wall_list))
+    
+    # Pacman thực hiện chính xác một trong bốn hành động theo DIRECTIONS dấu thời gian t
+    dir_list = exactlyOne([logic.PropSymbolExpr(direction, time = t) for direction in DIRECTIONS])
+    pacphysics_sentences.append(dir_list)
+    
+    # Sensors: append the result of sensorAxioms
+    if (sensorModel): pacphysics_sentences.append(sensorModel(t, non_outer_wall_coords))
+    
+    # Transitions: append the result of successorAxioms. All callers will use this.
+    if (successorAxioms and walls_grid and t):
+        pacphysics_sentences.append(successorAxioms(t, walls_grid, non_outer_wall_coords))
+    
+    return logic.conjoin(pacphysics_sentences)
     "*** END YOUR CODE HERE ***"
 
     return conjoin(pacphysics_sentences)
@@ -340,7 +360,15 @@ def checkLocationSatisfiability(x1_y1: Tuple[int, int], x0_y0: Tuple[int, int], 
     KB.append(conjoin(map_sent))
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    for i in range(0, 2):
+        KB.append(pacphysicsAxioms(i, all_coords, non_outer_wall_coords, walls_grid, None, allLegalSuccessorAxioms))
+
+    KB.append(logic.PropSymbolExpr(pacman_str, x0, y0, time = 0))
+    KB.append(logic.PropSymbolExpr(action1, time = 1))
+    KB.append(logic.PropSymbolExpr(action0, time = 0))
+    
+    return (findModel(logic.conjoin(KB) & logic.PropSymbolExpr(pacman_str, x1, y1, time = 1)), 
+            findModel(logic.conjoin(KB) & ~logic.PropSymbolExpr(pacman_str, x1, y1, time = 1)))
     "*** END YOUR CODE HERE ***"
 
 #______________________________________________________________________________
@@ -367,7 +395,26 @@ def positionLogicPlan(problem) -> List:
     KB = []
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    KB.append(logic.PropSymbolExpr(pacman_str, x0, y0, time = 0))
+    for t in range(50):
+        # print time t
+        print(f"Time step = {t}")
+        # Add to KB: Initial knowledge: Pacman can only be at exactlyOne of the locations in non_wall_coords at timestep t
+        pacman_locations = exactlyOne([logic.PropSymbolExpr(pacman_str, wall_coord[0], wall_coord[1], time = t) for wall_coord in non_wall_coords])
+        KB.append(pacman_locations)
+
+        # Is there a satisfying assignment for the variables given the knowledge base so far? Use findModel
+        goal_state = logic.PropSymbolExpr(pacman_str, xg, yg, time = t)
+        model = findModel(goal_state & logic.conjoin(KB))
+        if (model):
+            return extractActionSequence(model, actions)
+
+        # Add to KB
+        possible_actions = exactlyOne([logic.PropSymbolExpr(action, time = t) for action in actions])
+        KB.append(possible_actions)
+        for wall_coord in non_wall_coords: KB.append(pacmanSuccessorAxiomSingle(wall_coord[0], wall_coord[1], t+1, walls_grid))
+    
+    return None
     "*** END YOUR CODE HERE ***"
 
 #______________________________________________________________________________
