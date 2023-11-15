@@ -1,4 +1,5 @@
 import nn
+from backend import Dataset
 
 class PerceptronModel(object):
     def __init__(self, dimensions):
@@ -27,6 +28,7 @@ class PerceptronModel(object):
         Returns: a node containing a single number (the score)
         """
         "*** YOUR CODE HERE ***"
+        return nn.DotProduct(x, self.get_weights())
 
     def get_prediction(self, x):
         """
@@ -35,12 +37,27 @@ class PerceptronModel(object):
         Returns: 1 or -1
         """
         "*** YOUR CODE HERE ***"
+        return -1 if nn.as_scalar(self.run(x)) < 0 else 1
 
-    def train(self, dataset):
+    def train(self, dataset: Dataset):
         """
         Train the perceptron until convergence.
         """
         "*** YOUR CODE HERE ***"
+        # Each weight evaluation and modification will be done upon each data point.
+        isAllCorrect = False
+        
+        while not isAllCorrect:
+            isAllCorrect = True
+            
+            for x, y in dataset.iterate_once(1):
+                y = nn.as_scalar(y)
+
+                if self.get_prediction(x) != y:
+                    self.get_weights().update(x, y) # w -= x.data * y
+                    isAllCorrect = False
+                
+
 
 class RegressionModel(object):
     """
