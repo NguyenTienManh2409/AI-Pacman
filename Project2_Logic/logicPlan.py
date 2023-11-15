@@ -420,6 +420,15 @@ def positionLogicPlan(problem) -> List:
 #______________________________________________________________________________
 # QUESTION 5
 
+def foodSuccessorAxiomSingle(x: int, y: int, time: int) -> Expr:
+    now, last = time, time - 1
+    non_food_cause = []
+
+    non_food_cause.append(~PropSymbolExpr(food_str, x, y, time=last))
+    non_food_cause.append(PropSymbolExpr(food_str, x, y, time=last) & PropSymbolExpr(pacman_str, x, y, time=last))
+
+    return ~PropSymbolExpr(food_str, x, y, time=now) % disjoin(non_food_cause)
+
 def foodLogicPlan(problem) -> List:
     """
     Given an instance of a FoodPlanningProblem, return a list of actions that help Pacman
@@ -562,7 +571,6 @@ def mapping(problem, agent) -> Generator:
     KB.append(conjoin(outer_wall_sent))
 
     "*** BEGIN YOUR CODE HERE ***"
-    # initial location
     KB.append(PropSymbolExpr(pacman_str, pac_x_0, pac_y_0, time=0))
     known_map[pac_x_0][pac_y_0] = 0
     KB.append(~PropSymbolExpr(wall_str, pac_x_0, pac_y_0))
