@@ -56,7 +56,7 @@ class PerceptronModel(object):
                 y = nn.as_scalar(y)
 
                 if self.get_prediction(x) != y:
-                    self.get_weights().update(x, y) # w -= x.data * y
+                    self.get_weights().update(x, y) # w += x.data * y
                     isAllCorrect = False
                 
 
@@ -130,11 +130,15 @@ class RegressionModel(object):
         def isAcceptable(loss_obj):
             loss_function_value = loss_obj.data
 
-            return True if loss_function_value <= 0.02 else False
-            
+            return loss_function_value <= 0.02
         
         # evaluate weights by loss function and modify them until the loss function's value is admissible
         for x, y in dataset.iterate_forever(batch_size):
+
+            if isAcceptable(self.get_loss(x, y)):
+                print("Total epoch: %s" % epoch)
+                return
+
             batch_number = batch_number % total_batch + 1
             
             if batch_number == 1: epoch += 1
@@ -144,10 +148,6 @@ class RegressionModel(object):
             
             for i in range(len(gradients)):
                 params[i].update(gradients[i], -(learning_rate))  
-            
-            if isAcceptable(self.get_loss(x, y)):
-                print("Total epoch: %s" % epoch)
-                return
 
 
 class DigitClassificationModel(object):
@@ -273,6 +273,19 @@ class LanguageIDModel(object):
 
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        # Used to compute first state - f(x_0)
+        self.W1 = nn.Parameter(self.num_chars,100)
+        self.b1 = nn.Parameter(1,100)
+        self.W2 = nn.Parameter(100,100)
+        self.b2 = nn.Parameter(1,100)
+        # Used to compute next states - f(s_t-1, x_t)
+        self.W1_hidden = nn.Parameter(100,100)
+        self.b1_hidden = nn.Parameter(1,100)
+        self.W2_hidden = nn.Parameter(100,100)
+        self.b2_hidden = nn.Parameter(1,100)
+        # Used to compute the last linear function - the main model's output - f(s_N-1, x_N)
+        self.W_final = nn.Parameter(100,5)
+        self.b_final = nn.Parameter(1,5)
 
     def run(self, xs):
         """
@@ -304,6 +317,28 @@ class LanguageIDModel(object):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
+        for i in range(len(xs)):
+            if i == 0:
+                "Compute first state"
+                z1 = nn.AddBias(nn.Linear(xs[i], self.W1), self.b1)
+                a1 = nn.ReLU(z1);
+                # Output of the first state
+                s = nn.AddBias(nn.Linear(a1, self.W2), self.b2)
+            else:
+                "Compute next states (after the first one)"
+                prev_state_input = nn.Linear(s, self.W1_hidden) # s_t-1 * W
+                current_xs_input = nn.Linear(xs[i], self.W1) # x_t * U
+                current_input = nn.Add(current_xs_input, prev_state_input)
+
+                # Compute f(x) a.k.a output of the hidden neural network
+                z1 = nn.AddBias(current_input, self.b1_hidden)
+                a1 = nn.ReLU(z1)
+                z2 = nn.AddBias(nn.Linear(a1, self.W2_hidden), self.b2_hidden)
+
+                # Output of the current state
+                s = nn.ReLU(z2)
+
+        return nn.AddBias(nn.Linear(s, self.W_final), self.b_final)
 
     def get_loss(self, xs, y):
         """
@@ -320,9 +355,22 @@ class LanguageIDModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(xs)
+
+        return nn.SoftmaxLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+        batch_size = 40
+        learning_rate = 0.15
+
+        for xs, y in dataset.iterate_forever(batch_size):
+            if dataset.get_validation_accuracy() >= 0.896: return
+
+            param_list = [self.W1, self.b1, self.W2, self.b2, self.W1_hidden, self.b1_hidden, self.W2_hidden, self.b2_hidden, self.W_final, self.b_final]
+            gradients = nn.gradients(self.get_loss(xs, y), param_list)
+
+            for i in range(len(param_list)): param_list[i].update(gradients[i], -learning_rate)
