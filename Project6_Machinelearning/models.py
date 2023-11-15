@@ -1,4 +1,6 @@
 import nn
+from backend import Dataset
+import math
 
 class PerceptronModel(object):
     def __init__(self, dimensions):
@@ -27,6 +29,7 @@ class PerceptronModel(object):
         Returns: a node containing a single number (the score)
         """
         "*** YOUR CODE HERE ***"
+        return nn.DotProduct(x, self.get_weights())
 
     def get_prediction(self, x):
         """
@@ -35,12 +38,27 @@ class PerceptronModel(object):
         Returns: 1 or -1
         """
         "*** YOUR CODE HERE ***"
+        return -1 if nn.as_scalar(self.run(x)) < 0 else 1
 
-    def train(self, dataset):
+    def train(self, dataset: Dataset):
         """
         Train the perceptron until convergence.
         """
         "*** YOUR CODE HERE ***"
+        isAllCorrect = False
+        
+        # A while loop = 1 epoch
+        while not isAllCorrect:
+            isAllCorrect = True
+            
+            # Each weight evaluation and modification will be done upon each data point.
+            for x, y in dataset.iterate_once(1):
+                y = nn.as_scalar(y)
+
+                if self.get_prediction(x) != y:
+                    self.get_weights().update(x, y) # w += x.data * y
+                    isAllCorrect = False
+                
 
 class RegressionModel(object):
     """
@@ -51,6 +69,13 @@ class RegressionModel(object):
     def __init__(self):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        hidden_layer_size = 512 # equivalent to number of the hidden layer's nodes (features)
+        # 1 hidden layer (has weights denoted by w1 matrix)
+        self.w1 = nn.Parameter(1, hidden_layer_size)
+        self.b1 = nn.Parameter(1, hidden_layer_size)
+        # 1 node in output layer (has weights denoted by w2 matrix)
+        self.w2 = nn.Parameter(hidden_layer_size, 1)
+        self.b2 = nn.Parameter(1, 1)
 
     def run(self, x):
         """
@@ -62,6 +87,14 @@ class RegressionModel(object):
             A node with shape (batch_size x 1) containing predicted y-values
         """
         "*** YOUR CODE HERE ***"
+        linear_multi = nn.Linear(x, self.w1)
+        z1 = nn.AddBias(linear_multi, self.b1)
+        a1 = nn.ReLU(z1)
+
+        linear_multi = nn.Linear(a1, self.w2)
+        z2 = nn.AddBias(linear_multi, self.b2)
+        
+        return z2
 
     def get_loss(self, x, y):
         """
@@ -74,12 +107,48 @@ class RegressionModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(x)
+
+        return nn.SquareLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+        batch_size = 200
+        learning_rate = 0.05
+
+        # Calculate batch number of every loop
+        batch_number = 0
+        total_batch = math.ceil(dataset.x.shape[0] / batch_size)
+        # 1 epoch = the whole training dataset, thus epoch number will be increased by 1
+        # when the batch number is assigned with 1 again.
+        epoch = 0
+
+        # Determine if the loss function's value is admissible (<=0.02 - defined by autograde)
+        def isAcceptable(loss_obj):
+            loss_function_value = loss_obj.data
+
+            return loss_function_value <= 0.02
+        
+        # evaluate weights by loss function and modify them until the loss function's value is admissible
+        for x, y in dataset.iterate_forever(batch_size):
+
+            if isAcceptable(self.get_loss(x, y)):
+                print("Total epoch: %s" % epoch)
+                return
+
+            batch_number = batch_number % total_batch + 1
+            
+            if batch_number == 1: epoch += 1
+
+            params = [self.w1, self.w2, self.b1, self.b2]
+            gradients = nn.gradients(self.get_loss(x, y), params)
+            
+            for i in range(len(gradients)):
+                params[i].update(gradients[i], -(learning_rate))  
+
 
 class DigitClassificationModel(object):
     """
@@ -98,6 +167,12 @@ class DigitClassificationModel(object):
     def __init__(self):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        hidden_layer_size = 200
+
+        self.w1 = nn.Parameter(784, hidden_layer_size)
+        self.b1 = nn.Parameter(1, hidden_layer_size)
+        self.w2 = nn.Parameter(hidden_layer_size, 10)
+        self.b2 = nn.Parameter(1, 10)
 
     def run(self, x):
         """
@@ -114,6 +189,14 @@ class DigitClassificationModel(object):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
+        linear_multi = nn.Linear(x, self.w1)
+        z1 = nn.AddBias(linear_multi, self.b1)
+        a1 = nn.ReLU(z1)
+        
+        linear_multi = nn.Linear(a1, self.w2)
+        z2 = nn.AddBias(linear_multi, self.b2)
+        
+        return z2
 
     def get_loss(self, x, y):
         """
@@ -129,12 +212,48 @@ class DigitClassificationModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(x)
+
+        return nn.SoftmaxLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+        batch_size = 100
+        learning_rate = 0.5
+
+        # Calculate batch number of every loop
+        batch_number = 0
+        total_batch = math.ceil(dataset.x.shape[0] / batch_size)
+        # 1 epoch = the whole training dataset, thus epoch number will be increased by 1
+        # when the batch number is assigned with 1 again.
+        epoch = 0
+
+        # Determine if the loss function's value is admissible (<=0.02 - defined by autograder)
+        def isAcceptable(): return dataset.get_validation_accuracy() >= 0.98
+                
+        # evaluate weights by loss function and modify them until the loss function's value is admissible
+        for x, y in dataset.iterate_forever(batch_size):
+            batch_number = batch_number % total_batch + 1
+
+            if isAcceptable():
+                # print("Total epochs: %s" % epoch)
+                return
+
+            if batch_number == 1: 
+                epoch += 1
+                print(f"Processing epoch {epoch}... Achieved validation accuracy so far: {dataset.get_validation_accuracy()}")
+
+            # print(f"Batch number: {batch_number}")
+
+            param_list = [self.w1, self.b1, self.w2, self.b2]
+            gradients = nn.gradients(self.get_loss(x, y), param_list)
+            
+            for i in range(len(param_list)):
+                param_list[i].update(gradients[i], -learning_rate) #param -= gradient * learning_rate
+
 
 class LanguageIDModel(object):
     """
@@ -154,6 +273,19 @@ class LanguageIDModel(object):
 
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        # Used to compute first state - f(x_0)
+        self.W1 = nn.Parameter(self.num_chars, 100)
+        self.b1 = nn.Parameter(1, 100)
+        self.W2 = nn.Parameter(100, 100)
+        self.b2 = nn.Parameter(1, 100)
+        # Used to compute next states - f(s_t-1, x_t)
+        self.W1_hidden = nn.Parameter(100, 100)
+        self.b1_hidden = nn.Parameter(1, 100)
+        self.W2_hidden = nn.Parameter(100, 100)
+        self.b2_hidden = nn.Parameter(1, 100)
+        # Used to compute the last linear function - the main model's output - f(s_N-1, x_N)
+        self.W_final = nn.Parameter(100, 5)
+        self.b_final = nn.Parameter(1, 5)
 
     def run(self, xs):
         """
@@ -185,6 +317,28 @@ class LanguageIDModel(object):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
+        for i in range(len(xs)):
+            if i == 0:
+                "Compute first state"
+                z1 = nn.AddBias(nn.Linear(xs[i], self.W1), self.b1)
+                a1 = nn.ReLU(z1);
+                # Output of the first state
+                s = nn.AddBias(nn.Linear(a1, self.W2), self.b2)
+            else:
+                "Compute next states (after the first one)"
+                prev_state_input = nn.Linear(s, self.W1_hidden) # s_t-1 * W
+                current_xs_input = nn.Linear(xs[i], self.W1) # x_t * U
+                current_input = nn.Add(current_xs_input, prev_state_input)
+
+                # Compute f(x) a.k.a output of the hidden neural network
+                z1 = nn.AddBias(current_input, self.b1_hidden)
+                a1 = nn.ReLU(z1)
+                z2 = nn.AddBias(nn.Linear(a1, self.W2_hidden), self.b2_hidden)
+
+                # Output of the current (next) state
+                s = nn.ReLU(z2)
+
+        return nn.AddBias(nn.Linear(s, self.W_final), self.b_final)
 
     def get_loss(self, xs, y):
         """
@@ -201,9 +355,22 @@ class LanguageIDModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(xs)
+
+        return nn.SoftmaxLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+        batch_size = 40
+        learning_rate = 0.15
+
+        for xs, y in dataset.iterate_forever(batch_size):
+            if dataset.get_validation_accuracy() >= 0.896: return
+
+            param_list = [self.W1, self.b1, self.W2, self.b2, self.W1_hidden, self.b1_hidden, self.W2_hidden, self.b2_hidden, self.W_final, self.b_final]
+            gradients = nn.gradients(self.get_loss(xs, y), param_list)
+
+            for i in range(len(param_list)): param_list[i].update(gradients[i], -learning_rate)
