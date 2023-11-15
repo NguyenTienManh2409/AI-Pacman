@@ -1,5 +1,6 @@
 import nn
 from backend import Dataset
+import math
 
 class PerceptronModel(object):
     def __init__(self, dimensions):
@@ -120,7 +121,7 @@ class RegressionModel(object):
 
         # Calculate batch number of every loop
         batch_number = 0
-        total_batch = dataset.x.shape[0] / batch_size
+        total_batch = math.ceil(dataset.x.shape[0] / batch_size)
         # 1 epoch = the whole training dataset, thus epoch number will be increased by 1
         # when the batch number is assigned with 1 again.
         epoch = 0
@@ -128,7 +129,7 @@ class RegressionModel(object):
         # Determine if the loss function's value is admissible (<=0.02 - defined by autograde)
         def isAcceptable(loss_obj):
             loss_function_value = loss_obj.data
-            
+
             return True if loss_function_value <= 0.02 else False
             
         
@@ -166,6 +167,12 @@ class DigitClassificationModel(object):
     def __init__(self):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        hidden_layer_size = 200
+
+        self.w1 = nn.Parameter(784, hidden_layer_size)
+        self.b1 = nn.Parameter(1, hidden_layer_size)
+        self.w2 = nn.Parameter(hidden_layer_size, 10)
+        self.b2 = nn.Parameter(1, 10)
 
     def run(self, x):
         """
@@ -182,6 +189,14 @@ class DigitClassificationModel(object):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
+        linear_multi = nn.Linear(x, self.w1)
+        z1 = nn.AddBias(linear_multi, self.b1)
+        a1 = nn.ReLU(z1)
+        
+        linear_multi = nn.Linear(a1, self.w2)
+        z2 = nn.AddBias(linear_multi, self.b2)
+        
+        return z2
 
     def get_loss(self, x, y):
         """
@@ -197,12 +212,48 @@ class DigitClassificationModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(x)
+
+        return nn.SoftmaxLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+        batch_size = 100
+        learning_rate = 0.5
+
+        # Calculate batch number of every loop
+        batch_number = 0
+        total_batch = math.ceil(dataset.x.shape[0] / batch_size)
+        # 1 epoch = the whole training dataset, thus epoch number will be increased by 1
+        # when the batch number is assigned with 1 again.
+        epoch = 0
+
+        # Determine if the loss function's value is admissible (<=0.02 - defined by autograder)
+        def isAcceptable(): return dataset.get_validation_accuracy() >= 0.98
+                
+        # evaluate weights by loss function and modify them until the loss function's value is admissible
+        for x, y in dataset.iterate_forever(batch_size):
+            batch_number = batch_number % total_batch + 1
+
+            if isAcceptable():
+                # print("Total epochs: %s" % epoch)
+                return
+
+            if batch_number == 1: 
+                epoch += 1
+                print(f"Processing epoch {epoch}... Achieved validation accuracy so far: {dataset.get_validation_accuracy()}")
+
+            # print(f"Batch number: {batch_number}")
+
+            param_list = [self.w1, self.b1, self.w2, self.b2]
+            gradients = nn.gradients(self.get_loss(x, y), param_list)
+            
+            for i in range(len(param_list)):
+                param_list[i].update(gradients[i], -learning_rate) #param -= gradient * learning_rate
+
 
 class LanguageIDModel(object):
     """
