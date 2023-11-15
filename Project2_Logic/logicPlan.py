@@ -443,9 +443,10 @@ def foodLogicPlan(problem) -> List:
     KB = []
 
     "*** BEGIN YOUR CODE HERE ***"
-    KB.append(PropSymbolExpr(pacman_str, x0, y0, time=0))  
+    
+    KB.append(PropSymbolExpr(pacman_str, x0, y0, time=0)) 
     for x, y in food:
-        KB.append(PropSymbolExpr(food_str, x, y, time=0))  
+        KB.append(PropSymbolExpr(food_str, x, y, time=0)) 
 
     plan = []
     for t in range(50):
@@ -470,7 +471,7 @@ def foodLogicPlan(problem) -> List:
                 KB.append(foodSuccessorAxiomSingle(x, y, t))
             query_list.append(~PropSymbolExpr(food_str, x, y, time=t))
 
-        query = conjoin(query_list) 
+        query = conjoin(query_list)  # goal
         model = findModel(conjoin(KB) & query)
         if model:
             plan = extractActionSequence(model, actions)
@@ -495,7 +496,6 @@ def localization(problem, agent) -> Generator:
     KB = []
 
     "*** BEGIN YOUR CODE HERE ***"
-    #util.raiseNotDefined()
     for x, y in all_coords:
         if (x, y) in walls_list:
             KB.append(PropSymbolExpr(wall_str, x, y))
@@ -503,9 +503,11 @@ def localization(problem, agent) -> Generator:
             KB.append(~PropSymbolExpr(wall_str, x, y))
 
     for t in range(agent.num_timesteps):
+        # add pac physics
         KB.append(pacphysicsAxioms(t, all_coords, non_outer_wall_coords, walls_grid,
                                    sensorModel=sensorAxioms, successorAxioms=allLegalSuccessorAxioms))
 
+        # add action and percepts
         KB.append(PropSymbolExpr(agent.actions[t], time=t))
         KB.append(fourBitPerceptRules(t, agent.getPercepts()))
 
@@ -560,9 +562,39 @@ def mapping(problem, agent) -> Generator:
     KB.append(conjoin(outer_wall_sent))
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    # initial location
+    KB.append(PropSymbolExpr(pacman_str, pac_x_0, pac_y_0, time=0))
+    known_map[pac_x_0][pac_y_0] = 0
+    KB.append(~PropSymbolExpr(wall_str, pac_x_0, pac_y_0))
 
     for t in range(agent.num_timesteps):
+        # add pacman physics logic
+        KB.append(pacphysicsAxioms(t, all_coords, non_outer_wall_coords, known_map,
+                                   successorAxioms=allLegalSuccessorAxioms, sensorModel=sensorAxioms))
+
+        # add action and percepts
+        KB.append(PropSymbolExpr(agent.actions[t], time=t))
+        KB.append(fourBitPerceptRules(t, agent.getPercepts()))
+
+        for x, y in non_outer_wall_coords:
+            knowledge = conjoin(KB)
+            wall_loc = PropSymbolExpr(wall_str, x, y)
+            if known_map[x][y] == -1:
+                proof = entails(knowledge, wall_loc)
+                contra_proof = entails(knowledge, ~wall_loc)
+
+                if proof and contra_proof:
+                    print("Error: proof and contra_proof are entailed simultaneously!")
+                    exit(-1)
+
+                if proof:
+                    known_map[x][y] = 1
+                    KB.append(wall_loc)
+                elif contra_proof:
+                    known_map[x][y] = 0
+                    KB.append(~wall_loc)
+
+        agent.moveToNextState(agent.actions[t])
         "*** END YOUR CODE HERE ***"
         yield known_map
 
@@ -592,9 +624,57 @@ def slam(problem, agent) -> Generator:
     KB.append(conjoin(outer_wall_sent))
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    # initial
+    KB.append(PropSymbolExpr(pacman_str, pac_x_0, pac_y_0, time=0))
+    known_map[pac_x_0][pac_y_0] = 0
+    KB.append(~PropSymbolExpr(wall_str, pac_x_0, pac_y_0))
 
     for t in range(agent.num_timesteps):
+        KB.append(pacphysicsAxioms(t, all_coords, non_outer_wall_coords, known_map,
+                                   successorAxioms=SLAMSuccessorAxioms, sensorModel=SLAMSensorAxioms))
+
+        KB.append(numAdjWallsPerceptRules(t, agent.getPercepts()))
+        KB.append(PropSymbolExpr(agent.actions[t], time=t))
+
+        # mapping
+        for x, y in non_outer_wall_coords:
+            knowledge = conjoin(KB)
+            wall_loc = PropSymbolExpr(wall_str, x, y)
+            if known_map[x][y] == -1:
+                proof = entails(knowledge, wall_loc)
+                contra_proof = entails(knowledge, ~wall_loc)
+
+                if proof and contra_proof:
+                    print("Error: proof and contra_proof are entailed simultaneously!")
+                    exit(-1)
+
+                if proof:
+                    known_map[x][y] = 1
+                    KB.append(wall_loc)
+                elif contra_proof:
+                    known_map[x][y] = 0
+                    KB.append(~wall_loc)
+
+        # location
+        possible_locations = []
+        for x, y in non_outer_wall_coords:
+            knowledge = conjoin(KB)
+            pacman_loc = PropSymbolExpr(pacman_str, x, y, time=t)
+            if findModel(conjoin(KB) & pacman_loc):
+                possible_locations.append((x, y))
+
+            proof = entails(knowledge, pacman_loc)
+            contra_proof = entails(knowledge, ~pacman_loc)
+            if proof and contra_proof:
+                print("Error: proof and contra_proof are entailed simultaneously!")
+                exit(-1)
+
+            if proof:
+                KB.append(pacman_loc)
+            elif contra_proof:
+                KB.append(~pacman_loc)
+
+        agent.moveToNextState(agent.actions[t])
         "*** END YOUR CODE HERE ***"
         yield (known_map, possible_locations)
 
