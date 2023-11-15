@@ -44,12 +44,13 @@ class PerceptronModel(object):
         Train the perceptron until convergence.
         """
         "*** YOUR CODE HERE ***"
-        # Each weight evaluation and modification will be done upon each data point.
         isAllCorrect = False
         
+        # A while loop = 1 epoch
         while not isAllCorrect:
             isAllCorrect = True
             
+            # Each weight evaluation and modification will be done upon each data point.
             for x, y in dataset.iterate_once(1):
                 y = nn.as_scalar(y)
 
@@ -57,7 +58,6 @@ class PerceptronModel(object):
                     self.get_weights().update(x, y) # w -= x.data * y
                     isAllCorrect = False
                 
-
 
 class RegressionModel(object):
     """
@@ -68,6 +68,13 @@ class RegressionModel(object):
     def __init__(self):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        hidden_layer_size = 512 # equivalent to number of the hidden layer's nodes (features)
+        # 1 hidden layer (has weights denoted by w1 matrix)
+        self.w1 = nn.Parameter(1, hidden_layer_size)
+        self.b1 = nn.Parameter(1, hidden_layer_size)
+        # 1 node in output layer (has weights denoted by w2 matrix)
+        self.w2 = nn.Parameter(hidden_layer_size, 1)
+        self.b2 = nn.Parameter(1, 1)
 
     def run(self, x):
         """
@@ -79,6 +86,14 @@ class RegressionModel(object):
             A node with shape (batch_size x 1) containing predicted y-values
         """
         "*** YOUR CODE HERE ***"
+        linear_multi = nn.Linear(x, self.w1)
+        z1 = nn.AddBias(linear_multi, self.b1)
+        a1 = nn.ReLU(z1)
+
+        linear_multi = nn.Linear(a1, self.w2)
+        z2 = nn.AddBias(linear_multi, self.b2)
+        
+        return z2
 
     def get_loss(self, x, y):
         """
@@ -91,12 +106,48 @@ class RegressionModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(x)
+
+        return nn.SquareLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+        batch_size = 200
+        learning_rate = 0.05
+
+        # Calculate batch number of every loop
+        batch_number = 0
+        total_batch = dataset.x.shape[0] / batch_size
+        # 1 epoch = the whole training dataset, thus epoch number will be increased by 1
+        # when the batch number is assigned with 1 again.
+        epoch = 0
+
+        # Determine if the loss function's value is admissible (<=0.02 - defined by autograde)
+        def isAcceptable(loss_obj):
+            loss_function_value = loss_obj.data
+            
+            return True if loss_function_value <= 0.02 else False
+            
+        
+        # evaluate weights by loss function and modify them until the loss function's value is admissible
+        for x, y in dataset.iterate_forever(batch_size):
+            batch_number = batch_number % total_batch + 1
+            
+            if batch_number == 1: epoch += 1
+
+            params = [self.w1, self.w2, self.b1, self.b2]
+            gradients = nn.gradients(self.get_loss(x, y), params)
+            
+            for i in range(len(gradients)):
+                params[i].update(gradients[i], -(learning_rate))  
+            
+            if isAcceptable(self.get_loss(x, y)):
+                print("Total epoch: %s" % epoch)
+                return
+
 
 class DigitClassificationModel(object):
     """
