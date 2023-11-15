@@ -443,7 +443,40 @@ def foodLogicPlan(problem) -> List:
     KB = []
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    KB.append(PropSymbolExpr(pacman_str, x0, y0, time=0))  
+    for x, y in food:
+        KB.append(PropSymbolExpr(food_str, x, y, time=0))  
+
+    plan = []
+    for t in range(50):
+        print("Step %d" % t)
+        actual1_position = []
+        for x, y in non_wall_coords:
+            actual1_position.append(PropSymbolExpr(pacman_str, x, y, time=t))
+        KB.append(exactlyOne(actual1_position))
+
+        actual1_action = []
+        for action in actions:
+            actual1_action.append(PropSymbolExpr(action, time=t))
+        KB.append(exactlyOne(actual1_action))
+
+        if t > 0:
+            for x, y in non_wall_coords:
+                KB.append(pacmanSuccessorAxiomSingle(x, y, t, walls))
+
+        query_list = []
+        for x, y in food:
+            if t > 0:
+                KB.append(foodSuccessorAxiomSingle(x, y, t))
+            query_list.append(~PropSymbolExpr(food_str, x, y, time=t))
+
+        query = conjoin(query_list) 
+        model = findModel(conjoin(KB) & query)
+        if model:
+            plan = extractActionSequence(model, actions)
+            break
+
+    return plan
     "*** END YOUR CODE HERE ***"
 
 #______________________________________________________________________________
@@ -462,9 +495,42 @@ def localization(problem, agent) -> Generator:
     KB = []
 
     "*** BEGIN YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    #util.raiseNotDefined()
+    for x, y in all_coords:
+        if (x, y) in walls_list:
+            KB.append(PropSymbolExpr(wall_str, x, y))
+        else:
+            KB.append(~PropSymbolExpr(wall_str, x, y))
 
     for t in range(agent.num_timesteps):
+        KB.append(pacphysicsAxioms(t, all_coords, non_outer_wall_coords, walls_grid,
+                                   sensorModel=sensorAxioms, successorAxioms=allLegalSuccessorAxioms))
+
+        KB.append(PropSymbolExpr(agent.actions[t], time=t))
+        KB.append(fourBitPerceptRules(t, agent.getPercepts()))
+
+        possible_locations = []
+        for x, y in non_outer_wall_coords:
+            pacman_loc = PropSymbolExpr(pacman_str, x, y, time=t)
+            knowledge = conjoin(KB)
+            if findModel(knowledge & pacman_loc):
+                possible_locations.append((x, y))
+                print("pacman maybe at %d %d at time %d" % (x, y, t))
+
+            proof = entails(knowledge, pacman_loc)
+            contra_proof = entails(knowledge, ~pacman_loc)
+            if proof and contra_proof:
+                print("Error : possible and contra_possible are entailed simultaneously!")
+                exit(-1)
+
+            if proof:
+                KB.append(pacman_loc)
+                print("pacman must at %d %d at time %d" % (x, y, t))
+            elif contra_proof:
+                KB.append(~pacman_loc)
+                print("pacman must not at %d %d at time %d" % (x, y, t))
+
+        agent.moveToNextState(agent.actions[t])
         "*** END YOUR CODE HERE ***"
         yield possible_locations
 
