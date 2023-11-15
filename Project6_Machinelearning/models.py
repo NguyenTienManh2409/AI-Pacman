@@ -274,18 +274,18 @@ class LanguageIDModel(object):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
         # Used to compute first state - f(x_0)
-        self.W1 = nn.Parameter(self.num_chars,100)
-        self.b1 = nn.Parameter(1,100)
-        self.W2 = nn.Parameter(100,100)
-        self.b2 = nn.Parameter(1,100)
+        self.W1 = nn.Parameter(self.num_chars, 100)
+        self.b1 = nn.Parameter(1, 100)
+        self.W2 = nn.Parameter(100, 100)
+        self.b2 = nn.Parameter(1, 100)
         # Used to compute next states - f(s_t-1, x_t)
-        self.W1_hidden = nn.Parameter(100,100)
-        self.b1_hidden = nn.Parameter(1,100)
-        self.W2_hidden = nn.Parameter(100,100)
-        self.b2_hidden = nn.Parameter(1,100)
+        self.W1_hidden = nn.Parameter(100, 100)
+        self.b1_hidden = nn.Parameter(1, 100)
+        self.W2_hidden = nn.Parameter(100, 100)
+        self.b2_hidden = nn.Parameter(1, 100)
         # Used to compute the last linear function - the main model's output - f(s_N-1, x_N)
-        self.W_final = nn.Parameter(100,5)
-        self.b_final = nn.Parameter(1,5)
+        self.W_final = nn.Parameter(100, 5)
+        self.b_final = nn.Parameter(1, 5)
 
     def run(self, xs):
         """
@@ -335,7 +335,7 @@ class LanguageIDModel(object):
                 a1 = nn.ReLU(z1)
                 z2 = nn.AddBias(nn.Linear(a1, self.W2_hidden), self.b2_hidden)
 
-                # Output of the current state
+                # Output of the current (next) state
                 s = nn.ReLU(z2)
 
         return nn.AddBias(nn.Linear(s, self.W_final), self.b_final)
